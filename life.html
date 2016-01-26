@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html
+PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" 
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Conway's Game of Life</title>
+<style type="text/css">
+body, table, tr, td {margin: 0px; padding: 0px;}
+table {border-padding: 0px; border-collapse: collapse;}
+</style>
+<script type="text/javascript">
+//<![CDATA[
+// namespace this so as not to conflict with anything else
+if (!com) var com = {};
+if (!com.jcomeau) com.jcomeau = {};
+com.jcomeau.conwaylife = {
+ // assumes pixels of 1:1 aspect ratio
+ CELLSIZE: /\biPod\b/.test(navigator.userAgent) ? 50 : 10,
+ // fewer cells for iPod because it's slow and js halts after 10s, see
+ // https://discussions.apple.com/thread/2298038
+ CELLSPACING: 0,
+ CHANCE: .09,  // chance of random cell being alive at start
+ TICKTIME: 200,  // time in milliseconds between ticks (plus processing time)
+ TIMER: null,  // set when setTimeout called
+ ROWS: 0,
+ COLUMNS: 0,
+ DEBUGGING: false,
+ KEYCODE: {r: "r".charCodeAt(0), s: "s".charCodeAt(0), c: "c".charCodeAt(0)}
+};
+com.jcomeau.conwaylife.getParameters = function() {
+ var querystring = window.location.search;
+ var regex = /([^?=&]+)=([^?=&]*)/g;
+ var match;
+ while (match = regex.exec(querystring)) {
+  console.log("setting parameter " + match[1] + " to " + match[2]);
+  com.jcomeau.conwaylife[match[1]] = match[2]; // match[0] is complete match
+ }
+}
+com.jcomeau.conwaylife.start = function() {
+ var life = com.jcomeau.conwaylife;
+ life.getParameters();
+ var table = document.createElement("table");
+ document.body.appendChild(table);
+ var i, j, tr, td, cellsize = life.CELLSIZE + life.CELLSPACING;
+ life.COLUMNS = Math.max(1, Math.floor(window.innerWidth / cellsize));
+ life.ROWS = Math.max(1, Math.floor(window.innerHeight / cellsize));
+ for (i = 0; i < life.ROWS; i++) {
+  tr = document.createElement("tr");
+  table.appendChild(tr);
+  for (j = 0; j < life.COLUMNS; j++) {
+   td = document.createElement("td");
+   td.id = "(" + j + "," + i + ")";
+   td.width = td.height = life.CELLSIZE;
+   life.setCell(td, Math.random() < life.CHANCE ? "alive" : "dead");
+   td.onclick = life.toggle;
+   tr.appendChild(td);
+  }
+ }
+ document.onkeypress = life.keyHandler;
+ if (life.CHANCE) life.restart();
+};
+com.jcomeau.conwaylife.keyHandler = function(event) {
+ var life = com.jcomeau.conwaylife;
+ var charCode = event.charCode || event.keyCode;
+ if (charCode == life.KEYCODE["r"]) life.restart();
+ else if (charCode == life.KEYCODE["s"]) life.freeze();
+ else if (charCode == life.KEYCODE["c"]) life.clear();
+};
+com.jcomeau.conwaylife.recalc = function(cell) {
+ // set this cell's state; don't update its representation until phase 2
+ var life = com.jcomeau.conwaylife;
+ var surroundedBy = life.liveNeighbors(cell)
+ if (surroundedBy < 2 || surroundedBy > 3)  // rules 1 and 3
+  cell.className = "dead";
+ else if (surroundedBy == 3)  // rule 4; rule 2 is covered by default
+  cell.className = "alive";
+};
+com.jcomeau.conwaylife.liveNeighbors = function(cell) {
+ // must use colors, not className, to determine state
+ var life = com.jcomeau.conwaylife;
+ var column = parseInt(cell.id.substring(1, cell.id.indexOf(",")));
+ var row = parseInt(cell.id.substring(cell.id.indexOf(",") + 1,
+  cell.id.length - 1));
+ var alive = -(cell.style.backgroundColor == "green");
+ var i, j, r, c, td;
+ if (life.DEBUGGING && alive) console.log("checking cell at column " + cell.id);
+ for (i = -1; i < 2; i++) {
+  r = life.modulo(row + i, life.ROWS);
+  for (j = -1; j < 2; j++) {
+   c = life.modulo(column + j, life.COLUMNS);
+   td = document.getElementById("(" + c + "," + r + ")");
+   alive += td.style.backgroundColor == "green";
+  }
+ }
+ return alive;
+};
+com.jcomeau.conwaylife.modulo = function(number, divisor) {
+ // fix javascript modulo to work like Python's
+ return ((number % divisor) + divisor) % divisor;
+};
+com.jcomeau.conwaylife.update = function(cell) {
+ // based on the decisions made in phase 1, update this cell's state
+ cell.style.backgroundColor = cell.className == "alive" ? "green" : "white";
+};
+com.jcomeau.conwaylife.refresh = function() {
+ var life = com.jcomeau.conwaylife;
+ var cells = document.getElementsByTagName("td");
+ var i;
+ for (i = 0; i < cells.length; i++) {  // phase 1
+  life.recalc(cells[i]);
+ }
+ for (i = 0; i < cells.length; i++) {  // phase 2
+  life.update(cells[i]);
+ }
+ life.restart();
+};
+com.jcomeau.conwaylife.restart = function() {
+ var life = com.jcomeau.conwaylife;
+ life.TIMER = setTimeout(life.refresh, life.TICKTIME);
+};
+com.jcomeau.conwaylife.freeze = function() {
+ clearTimeout(com.jcomeau.conwaylife.TIMER);
+};
+com.jcomeau.conwaylife.toggle = function(cell) {
+ if (!(cell instanceof HTMLElement)) cell = this;  // called by onclick handler
+ var state = cell.className;
+ com.jcomeau.conwaylife.setCell(cell, state == "alive" ? "dead" : "alive");
+};
+com.jcomeau.conwaylife.setCell = function(cell, state) {
+ cell.className = state;
+ cell.style.backgroundColor = (state == "alive" ? "green" : "white");
+};
+com.jcomeau.conwaylife.clear = function() {
+ var life = com.jcomeau.conwaylife;
+ var cells = document.getElementsByTagName("td");
+ var i;
+ for (i = 0; i < cells.length; i++) {
+  life.setCell(cells[i], "dead");
+ }
+};
+window.onload = com.jcomeau.conwaylife.start;
+//]]>
+</script>
+</head>
+<body>
+</body>
+</html>
